@@ -7,6 +7,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+import 'activity/detail.dart';
+import 'activity/edit.dart';
+
 class HomePage extends StatefulWidget {
   @override
   _HomePageState createState() => _HomePageState();
@@ -72,16 +75,20 @@ class _HomePageState extends State<HomePage> {
     );
     showDialog(context: context,child: alertDialog);
   }
-  //
+
   @override
   Widget build(BuildContext context) {
+    DateTime today = new DateTime.now();
+    DateFormat formated = new DateFormat('dd-MMMM-yyyy');
+    String formatin = formated.format(today);
+    print(formatin);
     return Scaffold(
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.white,
         splashColor: Colors.blue,
         child: Icon(Icons.library_books, size: 30, color: Colors.blue,),
         onPressed: (){
-          Navigator.of(context).push(MaterialPageRoute(builder: (context) => new AddForm()));
+          Navigator.of(context).push(MaterialPageRoute(builder: (context) => new AddForm(email:email)));
         },
       ),
       body: Container(
@@ -104,6 +111,28 @@ class _HomePageState extends State<HomePage> {
                   backgroundImage: NetworkImage(imageUrl),
                   radius: 35,
                   backgroundColor: Colors.transparent,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 215, right: 10),
+               child: Align(
+                alignment: Alignment.topRight,
+                child: Container(
+                  height: 25,
+                  child: RaisedButton(
+                    splashColor: Colors.blue,
+                    elevation: 0,
+                    color: Colors.transparent,
+                    child: Text("Logout", style: TextStyle(color: Colors.white,fontFamily: "OpenSans"),),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20.0),
+                        side: BorderSide(color: Colors.white)
+                    ),
+                    onPressed: (){
+                      _signOut();
+                    },
+                  ),
                 ),
               ),
             ),
@@ -169,7 +198,7 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ),
                                 new Text(
-                                  "26 Februari 2020",
+                                  formatin,
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,
@@ -177,26 +206,9 @@ class _HomePageState extends State<HomePage> {
                                     fontFamily: "OpenSans",
                                   ),
                                 ),
-                                SizedBox(width: 40),
-                                Container(
-                                  height: 25,
-                                  child: RaisedButton(
-                                    splashColor: Colors.blue,
-                                    elevation: 0,
-                                    color: Colors.transparent,
-                                    child: Text("Logout", style: TextStyle(color: Colors.white,fontFamily: "OpenSans"),),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20.0),
-                                      side: BorderSide(color: Colors.white)
-                                    ),
-                                    onPressed: (){
-                                      _signOut();
-                                    },
-                                  ),
-                                )
                               ],
                             ),
-                          )
+                          ),
                         ],
                       ),
                     )
@@ -207,14 +219,23 @@ class _HomePageState extends State<HomePage> {
             Padding(
               padding: const EdgeInsets.only(top: 250),
               child: Container(
-                width: double.infinity,
-                height: 350.0,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: <Widget>[
-                      _Card()
-                    ],
-                  ),
+                child: Column(
+                  children: <Widget>[
+                     StreamBuilder(
+                       stream: Firestore.instance
+                           .collection("Todo")
+                           .where("email", isEqualTo: email).snapshots(),
+                       builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot){
+                         if(!snapshot.hasData)
+                           return new Container(
+                             child: Center(
+                               child: CircularProgressIndicator(),
+                             ),
+                           );
+                         return new CardList(document: snapshot.data.documents,);
+                       },
+                     )
+                  ],
                 ),
               ),
             )
@@ -512,3 +533,123 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
+class CardList extends StatelessWidget {
+  CardList({this.document});
+  final List<DocumentSnapshot> document;
+  @override
+  Widget build(BuildContext context){
+    return Container(
+      height: 350,
+      child: new ListView.builder(
+        padding: EdgeInsets.zero,
+        itemCount: document.length,
+        itemBuilder: (BuildContext context, int i){
+          String title = document[i].data['title'].toString();
+          String note = document[i].data['note'].toString();
+          DateTime time = document[i].data['datetime'].toDate();
+          DateFormat forma = new DateFormat('MMM');
+          String formattrd = forma.format(time);
+          print(formattrd);
+          return Dismissible(
+            key: new Key(document[i].documentID),
+            onDismissed: (direction){
+              Firestore.instance.runTransaction((transaction)async{
+                DocumentSnapshot snapshot = await transaction.get(document[i].reference);
+                await transaction.delete(snapshot.reference);
+              });
+              Scaffold.of(context).showSnackBar(
+                  new  SnackBar(content: new Text("Data Berhasil Dihapus"))
+              );
+            },
+            child: InkWell(
+              onTap: (){
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context)=> new Detail())
+                );
+              },
+              child: Card(
+                child: new Stack(
+                  children: <Widget>[
+                    Container(
+                      child: Row(
+                        children: <Widget>[
+                          Container(
+                            padding: EdgeInsets.all(10.0),
+                            child: Column(
+                              children: <Widget>[
+                                new Text(time.year.toString(),style: TextStyle(color: Colors.white,fontSize: 14, fontWeight: FontWeight.bold),),
+                                new Text(time.day.toString(),style: TextStyle(color: Colors.white,fontSize: 24, fontWeight: FontWeight.bold),),
+                                new Text(formattrd.toString().toString(),style: TextStyle(color: Colors.white,fontSize: 14, fontWeight: FontWeight.bold),),
+                              ],
+                            ),
+                            decoration: BoxDecoration(
+                                color: Colors.blue,
+                                borderRadius: BorderRadius.only(topLeft: Radius.circular(4), bottomLeft: Radius.circular(4))
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.all(5),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                new Text(title, style: TextStyle(color: Colors.blue, fontFamily: "OpenSans", fontSize: 18, fontWeight: FontWeight.bold),),
+                                new Text(note.toString(), style: TextStyle(fontFamily: "OpenSans")),
+                              ],
+                            ),
+                          )
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 25, right: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          height: 30,
+                          width: 70,
+                          child: RaisedButton(
+                            splashColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20)
+                            ),
+                            color: Colors.blue,
+                            child: Text("Edit",style: TextStyle(color: Colors.white, fontSize: 11, fontFamily: "OpenSans"),),
+                            onPressed: (){
+                              Navigator.of(context).push(new MaterialPageRoute(
+                                  builder: (BuildContext context) => new EditForm(
+                                    title: title,
+                                    note: note,
+                                    datetime: document[i].data['datetime'].toDate(),
+                                    index: document[i].reference,
+                                  ))
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    )
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
